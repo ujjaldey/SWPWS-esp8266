@@ -25,8 +25,6 @@ ESP8266WebServer server(80);
 
 ArduinoJWT jwt = ArduinoJWT("secret");
 
-StaticJsonBuffer<200> jsonBuffer;
-
 const unsigned int httpStatusCodeSuccess = 200;
 const unsigned int httpStatusCodeNotModified = 304;
 const unsigned int httpStatusCodeError = 400;
@@ -110,6 +108,7 @@ bool isAuthorized() {
       char jsonCharArr[jsonStrLen];
       jsonStr.toCharArray(jsonCharArr, jsonStrLen);
 
+      StaticJsonBuffer<200> jsonBuffer;
       JsonObject& root = jsonBuffer.parseObject(jsonCharArr);
 
       if (root.success()) {
