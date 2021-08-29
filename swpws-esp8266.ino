@@ -89,6 +89,11 @@ String jwtToJsonStr(String jwtStr)
   return jsonStr;
 }
 
+bool validateCredential(const char *user, const char *password)
+{
+  return strcmp(user, piUser) == 0 && strcmp(password, piPassword) == 0;
+}
+
 bool isAuthorized()
 {
   bool isAuthorized = false;
@@ -119,7 +124,7 @@ bool isAuthorized()
         Serial.println(user);
         Serial.println(password);
 
-        if (strcmp(user, piUser) == 0 && strcmp(password, piPassword) == 0)
+        if (validateCredential(user, password))
         {
           isAuthorized = true;
         }
@@ -164,9 +169,9 @@ bool isAuthorized()
 void restServerRouting()
 {
   server.on("/", HTTP_GET, welcome);
-  server.on(F("/ping"), HTTP_GET, ping);
-  //  server.on(F("/on"), HTTP_GET, led_on);
-  //  server.on(F("/off"), HTTP_GET, led_off);
+  server.on("/status", HTTP_POST, action_status);
+  server.on("/on", HTTP_GET, action_on);
+  server.on("/off", HTTP_GET, action_off);
 }
 
 void welcome()
@@ -176,12 +181,97 @@ void welcome()
               "{\"success\": true, \"message\": \"Welcome to SWPWS-ESP8266 REST Web Server\"}");
 }
 
-void ping()
+void action_status()
 {
+  bool isValid = false;
+  String message = "";
+  int returnCode = 0;
+  String jwtStr = "";
+
+  Serial.println(server.arg("plain"));
+  Serial.println(server.args());
+  for (int i = 0; i < server.args(); i++)
+  {
+    Serial.print(server.argName(i) + ": ");
+    Serial.println(server.arg(i));
+  }
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject &root = jsonBuffer.parseObject(server.arg("plain"));
+
+  if (root.success())
+  {
+    const char *user = root["user"];
+    const char *password = root["password"];
+
+    if (validateCredential(user, password))
+    {
+      jwtStr = generateJwt(user, password);
+      isValid = true;
+      returnCode = 200;
+    }
+    else
+    {
+      message = "Invalid credentials";
+      isValid = false;
+      returnCode = 401;
+    }
+  }
+  else
+  {
+    message = "Token parsing failed";
+    isValid = false;
+    returnCode = 400;
+  }
+
+  if (isValid)
+  {
+    server.send(returnCode, "application/json", "{\"success\": true, \"jwt\": \"" + jwtStr + "\"}");
+  }
+  else
+  {
+    Serial.println("ERROR: " + message);
+    server.send(returnCode, "application/json", "{\"success\": false, \"message\": \"" + message + "\"}");
+  }
+}
+
+void action_on()
+{
+  String message = "";
+
   if (isAuthorized())
   {
-    server.send(200, "text/json", "{\"ping\": \"pong\"}");
+    server.send(200, "application/json", "{\"success\": true, \"message\": \"Application is turned on\"}");
   }
+}
+
+void action_off()
+{
+  String message = "";
+
+  if (isAuthorized())
+  {
+    server.send(200, "application/json", "{\"success\": true, \"message\": \"Application is turned off\"}");
+  }
+}
+
+String generateJwt(const char *user, const char *password)
+{
+  String userStr(user);
+  String passwordStr(password);
+
+  String inputStr = "{\"user\":\"" + userStr + "\",\"password\":\"" + passwordStr + "\"}";
+  int inputStrLen = inputStr.length() + 1;
+  char inputCharArr[inputStrLen];
+  inputStr.toCharArray(inputCharArr, inputStrLen);
+
+  int input1Len = jwt.getJWTLength(inputCharArr);
+  char output[input1Len];
+  jwt.encodeJWT(inputCharArr, output);
+  Serial.println("\nEncoded JWT:");
+  Serial.println(output);
+
+  String outputStr(output);
+  return outputStr;
 }
 
 void handleNotFound()
