@@ -2,18 +2,18 @@
    swpws-esp8266.ino
 */
 #include <Arduino.h>
-#include <ESP8266WebServer.h>
-#include <ArduinoJWT.h>
-#include <sha256.h>
 #include <ArduinoJson.h>
+#include <ArduinoJWT.h>
+#include <ESP8266WebServer.h>
+#include <sha256.h>
 
 // Set the WIFI SSID and password
 // Replace with your SSID and password
-const char *ssid = "<your wifi ssid>";
-const char *password = "<your wifi password>";
+const char* ssid = "<your wifi ssid>";
+const char* password = "<your wifi password>";
 
-const char *piUser = "pi";
-const char *piPassword = "raspberry";
+const char* piUser = "pi";
+const char* piPassword = "raspberry";
 
 // Set Static IP address, Gateway, and Subnet
 // Change if necessary
@@ -27,12 +27,14 @@ ArduinoJWT jwt = ArduinoJWT("secret");
 
 StaticJsonBuffer<200> jsonBuffer;
 
-void setupWifi()
-{
+unsigned int httpStatusCodeSuccess = 200;
+unsigned int httpStatusCodeError = 400;
+unsigned int httpStatusCodeUnauthorized = 401;
+
+void setupWifi() {
   // Set Wifi mode and IP addresses
   WiFi.mode(WIFI_STA);
-  if (!WiFi.config(staticIP, gateway, subnet))
-  {
+  if (!WiFi.config(staticIP, gateway, subnet)) {
     Serial.println("ERROR: STA could not be configured");
   }
 
@@ -46,8 +48,7 @@ void setupWifi()
   Serial.print(ssid);
 
   // Wait for the connection
-  while (WiFi.status() != WL_CONNECTED)
-  {
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
@@ -59,8 +60,7 @@ void setupWifi()
   Serial.println("");
 }
 
-void setupServer()
-{
+void setupServer() {
   // Set server routing
   restServerRouting();
 
@@ -74,8 +74,7 @@ void setupServer()
   Serial.println("");
 }
 
-String jwtToJsonStr(String jwtStr)
-{
+String jwtToJsonStr(String jwtStr) {
   int jwtStrLen = jwtStr.length() + 1;
   char jwtCharArr[jwtStrLen];
   jwtStr.toCharArray(jwtCharArr, jwtStrLen);
@@ -83,28 +82,22 @@ String jwtToJsonStr(String jwtStr)
   int jsonStrLen = jwt.getJWTPayloadLength(jwtStr);
   char jsonStr[jsonStrLen];
   jwt.decodeJWT(jwtCharArr, jsonStr, jsonStrLen);
-  Serial.println("\nDecoded Payload:");
-  Serial.println(jsonStr);
 
   return jsonStr;
 }
 
-bool validateCredential(const char *user, const char *password)
-{
+bool validateCredential(const char* user, const char* password) {
   return strcmp(user, piUser) == 0 && strcmp(password, piPassword) == 0;
 }
 
-bool isAuthorized()
-{
+bool isAuthorized() {
   bool isAuthorized = false;
   String message = "";
 
-  if (server.hasHeader("Authorization"))
-  {
+  if (server.hasHeader("Authorization")) {
     String authHeader = {server.header("Authorization")};
 
-    if (authHeader.indexOf("Bearer") >= 0)
-    {
+    if (authHeader.indexOf("Bearer") >= 0) {
       String jwt = authHeader;
       jwt.replace("Bearer ", "");
       String jsonStr = jwtToJsonStr(jwt);
@@ -113,149 +106,104 @@ bool isAuthorized()
       char jsonCharArr[jsonStrLen];
       jsonStr.toCharArray(jsonCharArr, jsonStrLen);
 
-      JsonObject &root = jsonBuffer.parseObject(jsonCharArr);
+      JsonObject& root = jsonBuffer.parseObject(jsonCharArr);
 
-      if (root.success())
-      {
-        const char *user = root["user"];
-        const char *password = root["password"];
+      if (root.success()) {
+        const char* user = root["user"];
+        const char* password = root["password"];
 
-        Serial.println("*****************");
-        Serial.println(user);
-        Serial.println(password);
-
-        if (validateCredential(user, password))
-        {
+        if (validateCredential(user, password)) {
           isAuthorized = true;
-        }
-        else
-        {
+        } else {
           message = "Invalid credentials";
           isAuthorized = false;
         }
-      }
-      else
-      {
+      } else {
         message = "Token parsing failed";
         isAuthorized = false;
       }
-    }
-    else
-    {
+    } else {
       message = "No Bearer token found in the request";
       isAuthorized = false;
     }
-  }
-  else
-  {
+  } else {
     message = "No Header found in the request";
   }
 
-  if (isAuthorized)
-  {
+  if (isAuthorized) {
     return true;
-  }
-  else
-  {
+  } else {
     Serial.println("ERROR: " + message);
-    server.send(401,
-                "application/json",
-                "{\"success\": false, \"message\": \"" + message + "\"}");
+    server.send(httpStatusCodeUnauthorized, "application/json", "{\"success\": false, \"message\": \"" + message + "\"}");
     return false;
   }
 }
 
 // Define routing
-void restServerRouting()
-{
+void restServerRouting() {
   server.on("/", HTTP_GET, welcome);
   server.on("/status", HTTP_POST, action_status);
   server.on("/on", HTTP_GET, action_on);
   server.on("/off", HTTP_GET, action_off);
 }
 
-void welcome()
-{
-  server.send(200,
-              "application/json",
-              "{\"success\": true, \"message\": \"Welcome to SWPWS-ESP8266 REST Web Server\"}");
+void welcome() {
+  server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Welcome to SWPWS-ESP8266 REST Web Server\"}");
 }
 
-void action_status()
-{
+void action_status() {
   bool isValid = false;
   String message = "";
   int returnCode = 0;
   String jwtStr = "";
 
-  Serial.println(server.arg("plain"));
-  Serial.println(server.args());
-  for (int i = 0; i < server.args(); i++)
-  {
-    Serial.print(server.argName(i) + ": ");
-    Serial.println(server.arg(i));
-  }
   StaticJsonBuffer<200> jsonBuffer;
-  JsonObject &root = jsonBuffer.parseObject(server.arg("plain"));
+  JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
 
-  if (root.success())
-  {
-    const char *user = root["user"];
-    const char *password = root["password"];
+  if (root.success()) {
+    const char* user = root["user"];
+    const char* password = root["password"];
 
-    if (validateCredential(user, password))
-    {
+    if (validateCredential(user, password)) {
       jwtStr = generateJwt(user, password);
       isValid = true;
-      returnCode = 200;
-    }
-    else
-    {
+      returnCode  = httpStatusCodeSuccess;
+    } else {
       message = "Invalid credentials";
       isValid = false;
-      returnCode = 401;
+      returnCode  = httpStatusCodeUnauthorized;
     }
-  }
-  else
-  {
+  } else {
     message = "Token parsing failed";
     isValid = false;
-    returnCode = 400;
+    returnCode  = httpStatusCodeError;
   }
 
-  if (isValid)
-  {
+  if (isValid) {
     server.send(returnCode, "application/json", "{\"success\": true, \"jwt\": \"" + jwtStr + "\"}");
-  }
-  else
-  {
+  } else {
     Serial.println("ERROR: " + message);
     server.send(returnCode, "application/json", "{\"success\": false, \"message\": \"" + message + "\"}");
   }
 }
 
-void action_on()
-{
+void action_on() {
   String message = "";
 
-  if (isAuthorized())
-  {
-    server.send(200, "application/json", "{\"success\": true, \"message\": \"Application is turned on\"}");
+  if (isAuthorized()) {
+    server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned on\"}");
   }
 }
 
-void action_off()
-{
+void action_off() {
   String message = "";
 
-  if (isAuthorized())
-  {
-    server.send(200, "application/json", "{\"success\": true, \"message\": \"Application is turned off\"}");
+  if (isAuthorized()) {
+    server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned off\"}");
   }
 }
 
-String generateJwt(const char *user, const char *password)
-{
+String generateJwt(const char* user, const char* password) {
   String userStr(user);
   String passwordStr(password);
 
@@ -267,26 +215,22 @@ String generateJwt(const char *user, const char *password)
   int input1Len = jwt.getJWTLength(inputCharArr);
   char output[input1Len];
   jwt.encodeJWT(inputCharArr, output);
-  Serial.println("\nEncoded JWT:");
-  Serial.println(output);
 
   String outputStr(output);
   return outputStr;
 }
 
-void handleNotFound()
-{
+void handleNotFound() {
+
 }
 
-void setup()
-{
+void setup() {
   Serial.begin(115200);
 
   setupWifi();
   setupServer();
 }
 
-void loop()
-{
+void loop() {
   server.handleClient();
 }
