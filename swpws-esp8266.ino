@@ -17,9 +17,9 @@ const char* piPassword = "raspberry";
 
 // Set Static IP address, Gateway, and Subnet
 // Change if necessary
-IPAddress staticIP(192, 168, 10, 205);
-IPAddress gateway(192, 168, 10, 1);
-IPAddress subnet(255, 255, 255, 0);
+const IPAddress staticIP(192, 168, 10, 205);
+const IPAddress gateway(192, 168, 10, 1);
+const IPAddress subnet(255, 255, 255, 0);
 
 ESP8266WebServer server(80);
 
@@ -27,9 +27,13 @@ ArduinoJWT jwt = ArduinoJWT("secret");
 
 StaticJsonBuffer<200> jsonBuffer;
 
-unsigned int httpStatusCodeSuccess = 200;
-unsigned int httpStatusCodeError = 400;
-unsigned int httpStatusCodeUnauthorized = 401;
+const unsigned int httpStatusCodeSuccess = 200;
+const unsigned int httpStatusCodeNotModified = 304;
+const unsigned int httpStatusCodeError = 400;
+const unsigned int httpStatusCodeUnauthorized = 401;
+
+const int outputPin = 16;
+bool outputPinIsOn = false;
 
 void setupWifi() {
   // Set Wifi mode and IP addresses
@@ -191,7 +195,13 @@ void action_on() {
   String message = "";
 
   if (isAuthorized()) {
-    server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned on\"}");
+    if (!outputPinIsOn) {
+      digitalWrite(outputPin, LOW);
+      outputPinIsOn = !outputPinIsOn;
+      server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned on\"}");
+    } else {
+      server.send(httpStatusCodeNotModified, "application/json", "{\"success\": true, \"message\": \"Application is already turned on\"}");
+    }
   }
 }
 
@@ -199,7 +209,13 @@ void action_off() {
   String message = "";
 
   if (isAuthorized()) {
-    server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned off\"}");
+    if (outputPinIsOn) {
+      digitalWrite(outputPin, HIGH);
+      outputPinIsOn = !outputPinIsOn;
+      server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned off\"}");
+    } else {
+      server.send(httpStatusCodeNotModified, "application/json", "{\"success\": true, \"message\": \"Application is already turned off\"}");
+    }
   }
 }
 
@@ -229,6 +245,11 @@ void setup() {
 
   setupWifi();
   setupServer();
+
+  // Initialize the output variables as outputs
+  pinMode(outputPin, OUTPUT);
+  // Set outputs to LOW
+  digitalWrite(outputPin, HIGH);
 }
 
 void loop() {
