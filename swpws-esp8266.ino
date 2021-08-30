@@ -144,17 +144,22 @@ bool isAuthorized() {
 
 // Define routing
 void restServerRouting() {
-  server.on("/", HTTP_GET, welcome);
+  server.on("/", HTTP_GET, action_welcome);
+  server.on("/token", HTTP_POST, action_token);
+  server.on("/on", HTTP_POST, action_on);
+  server.on("/off", HTTP_POST, action_off);
   server.on("/status", HTTP_POST, action_status);
-  server.on("/on", HTTP_GET, action_on);
-  server.on("/off", HTTP_GET, action_off);
 }
 
-void welcome() {
+void action_welcome() {
+  Serial.println("Endpoint triggered: /");
+
   server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Welcome to SWPWS-ESP8266 REST Web Server\"}");
 }
 
-void action_status() {
+void action_token() {
+  Serial.println("Endpoint triggered: /token");
+
   bool isValid = false;
   String message = "";
   int returnCode = 0;
@@ -183,38 +188,52 @@ void action_status() {
   }
 
   if (isValid) {
-    server.send(returnCode, "application/json", "{\"success\": true, \"jwt\": \"" + jwtStr + "\"}");
+    server.send(returnCode, "application/json", "{\"success\": true, \"jwt\": \"" + jwtStr + "\", \"status\": null}");
   } else {
     Serial.println("ERROR: " + message);
-    server.send(returnCode, "application/json", "{\"success\": false, \"message\": \"" + message + "\"}");
+    server.send(returnCode, "application/json", "{\"success\": false, \"message\": \"" + message + "\", \"status\": null}");
   }
 }
 
 void action_on() {
+  Serial.println("Endpoint triggered: / on");
+
   String message = "";
 
   if (isAuthorized()) {
     if (!outputPinIsOn) {
       digitalWrite(outputPin, LOW);
       outputPinIsOn = !outputPinIsOn;
-      server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned on\"}");
+      server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned on\", \"status\": null}");
     } else {
-      server.send(httpStatusCodeNotModified, "application/json", "{\"success\": true, \"message\": \"Application is already turned on\"}");
+      server.send(httpStatusCodeNotModified, "application/json", "{\"success\": true, \"message\": \"Application is already turned on\", \"status\": null}");
     }
   }
 }
 
 void action_off() {
+  Serial.println("Endpoint triggered: /off");
+
   String message = "";
 
   if (isAuthorized()) {
     if (outputPinIsOn) {
       digitalWrite(outputPin, HIGH);
       outputPinIsOn = !outputPinIsOn;
-      server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned off\"}");
+      server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned off\", \"status\": null}");
     } else {
-      server.send(httpStatusCodeNotModified, "application/json", "{\"success\": true, \"message\": \"Application is already turned off\"}");
+      server.send(httpStatusCodeNotModified, "application/json", "{\"success\": true, \"message\": \"Application is already turned off\", \"status\": null}");
     }
+  }
+}
+
+void action_status() {
+  Serial.println("Endpoint triggered: /status");
+
+  if (isAuthorized()) {
+    String onOff = outputPinIsOn ? "on" : "off";
+    String status = outputPinIsOn ? "true" : "false";
+    server.send(httpStatusCodeSuccess, "application/json", "{\"success\": true, \"message\": \"Application is turned " + onOff + "\", \"status\": " + status + "}");
   }
 }
 
